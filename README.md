@@ -1,2 +1,0 @@
-# GAKUFU-PT
-# GAKUFU-PT
