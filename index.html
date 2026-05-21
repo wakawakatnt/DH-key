@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ECDH暗号通信</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Segoe UI','Hiragino Sans',sans-serif;background:#0a0e27;color:#e0e0e0;min-height:100vh;padding:20px}
+h1{text-align:center;font-size:1.5em;margin-bottom:6px;background:linear-gradient(90deg,#00d2ff,#7b2ff7);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.sub{text-align:center;color:#888;font-size:.82em;margin-bottom:20px}
+.container{max-width:860px;margin:0 auto}
+.tabs{display:flex;gap:4px;margin-bottom:16px}
+.tab{flex:1;padding:12px;text-align:center;background:#131735;border:1px solid #2a2f55;border-radius:10px 10px 0 0;cursor:pointer;font-weight:bold;font-size:.95em;transition:.2s}
+.tab.active{background:#1c2250;border-bottom-color:#1c2250;color:#00d2ff}
+.panel{display:none;background:#131735;border:1px solid #2a2f55;border-radius:0 0 12px 12px;padding:24px}
+.panel.active{display:block}
+label{display:block;font-size:.85em;color:#aaa;margin-bottom:6px;margin-top:14px}
+label:first-child{margin-top:0}
+textarea,input[type=text]{width:100%;background:#0d1130;border:1px solid #3a3f66;border-radius:8px;color:#fff;font-size:.95em;padding:10px 12px;outline:none;font-family:inherit;resize:vertical}
+textarea:focus,input[type=text]:focus{border-color:#00d2ff}
+textarea{min-height:60px}
+.key-display{background:#0d1130;border:1px solid #3a3f66;border-radius:8px;padding:10px 12px;font-family:'Courier New',monospace;font-size:.75em;word-break:break-all;color:#7ec8e3;margin-top:4px;min-height:36px;user-select:all;cursor:text;max-height:120px;overflow-y:auto}
+.btn{display:inline-block;padding:10px 20px;border:none;border-radius:8px;font-size:.9em;font-weight:bold;cursor:pointer;transition:.2s;margin-top:10px;margin-right:6px}
+.btn:hover{transform:translateY(-1px);filter:brightness(1.1)}
+.btn-blue{background:linear-gradient(135deg,#00d2ff,#7b2ff7);color:#fff}
+.btn-green{background:linear-gradient(135deg,#00c853,#00d2ff);color:#fff}
+.btn-orange{background:linear-gradient(135deg,#ff8a3d,#ffc04d);color:#000}
+.btn-red{background:linear-gradient(135deg,#ff4d6a,#ff8a3d);color:#fff}
+.btn:disabled{opacity:.35;cursor:not-allowed;transform:none}
+.result-box{background:#0a1a0a;border:1px solid #00e67644;border-radius:8px;padding:12px;font-size:.95em;color:#00e676;margin-top:10px;min-height:36px;word-break:break-all}
+.err-box{background:#1a0a0a;border:1px solid #ff4d6a44;border-radius:8px;padding:12px;font-size:.9em;color:#ff6b6b;margin-top:10px}
+.cipher-box{background:#1a0a1a;border:1px solid #9c27b055;border-radius:8px;padding:12px;font-family:'Courier New',monospace;font-size:.78em;color:#ce93d8;margin-top:10px;word-break:break-all;min-height:36px;user-select:all}
+.info{background:#1a1f45;border-left:3px solid #7b2ff7;padding:10px 14px;margin-top:14px;font-size:.8em;color:#aaa;border-radius:0 8px 8px 0;line-height:1.6}
+.status{display:inline-block;padding:3px 10px;border-radius:20px;font-size:.78em;font-weight:bold;margin-left:8px}
+.status.ok{background:#00e67633;color:#00e676}
+.status.wait{background:#ffc04d33;color:#ffc04d}
+.copy-btn{background:none;border:1px solid #3a3f66;color:#aaa;padding:4px 10px;border-radius:6px;font-size:.78em;cursor:pointer;margin-left:8px;transition:.2s}
+.copy-btn:hover{border-color:#00d2ff;color:#00d2ff}
+.flex-label{display:flex;align-items:center;justify-content:space-between}
+.section-title{font-size:.95em;font-weight:bold;color:#7b9ff7;margin-top:18px;margin-bottom:4px;padding-bottom:6px;border-bottom:1px solid #2a2f55}
+.section-title:first-child{margin-top:0}
+hr{border:none;border-top:1px solid #2a2f55;margin:18px 0}
+</style>
+</head>
+<body>
+<div class="container">
+<h1>ECDH 暗号通信ツール</h1>
+<p class="sub">Web Crypto API（ECDH P-256 + AES-256-GCM）— ブラウザだけで完結、サーバー送信なし</p>
+
+<div class="tabs">
+  <div class="tab active" onclick="switchTab(0)">① 鍵を作る</div>
+  <div class="tab" onclick="switchTab(1)">② 暗号化する</div>
+  <div class="tab" onclick="switchTab(2)">③ 復号する</div>
+</div>
+
+<!-- Panel 0: 鍵生成 -->
+<div class="panel active" id="panel0">
+  <div class="section-title">自分の鍵ペアを生成</div>
+  <p style="font-size:.85em;color:#aaa;margin-bottom:10px">ECDH P-256 の鍵ペアを生成します。秘密鍵は絶対に他人に渡さないでください。</p>
+  <button class="btn btn-blue" onclick="generateKeys()">鍵ペアを生成</button>
+  <span id="gen-status"></span>
+
+  <div class="flex-label" style="margin-top:16px">
+    <label style="margin:0">あなたの公開鍵 <span style="color:#00d2ff;font-size:.8em">（相手に渡す）</span></label>
+    <button class="copy-btn" onclick="copyText('my-pub')">コピー</button>
+  </div>
+  <div class="key-display" id="my-pub">未生成</div>
+
+  <div class="flex-label">
+    <label style="margin:0;margin-top:14px">あなたの秘密鍵 <span style="color:#ff4d6a;font-size:.8em">（絶対に秘密）</span></label>
+    <button class="copy-btn" onclick="copyText('my-sec')" style="margin-top:14px">コピー</button>
+  </div>
+  <div class="key-display" id="my-sec" style="color:#ff6b6b">未生成</div>
+
+  <hr>
+  <div class="section-title">鍵のインポート（別タブ/別端末の鍵を復元）</div>
+  <label>秘密鍵を貼り付けて復元</label>
+  <textarea id="import-sec" rows="2" placeholder="JWK形式の秘密鍵を貼り付け"></textarea>
+  <button class="btn btn-orange" onclick="importMyKey()">秘密鍵をインポート</button>
+  <span id="import-status"></span>
+
+  <div class="info">
+    <strong>使い方：</strong><br>
+    1. あなたと相手がそれぞれこのページで鍵ペアを生成<br>
+    2. お互いの<strong>公開鍵</strong>だけを交換（LINEやメール等なんでもOK）<br>
+    3.「暗号化する」タブで相手の公開鍵を貼り、メッセージを暗号化<br>
+    4. 暗号文を相手に送信。相手は「復号する」タブで復号
+  </div>
+</div>
+
+<!-- Panel 1: 暗号化 -->
+<div class="panel" id="panel1">
+  <div class="section-title">暗号化</div>
+  <label>相手の公開鍵を貼り付け</label>
+  <textarea id="their-pub-enc" rows="2" placeholder="相手からもらった公開鍵（JWK）を貼り付け"></textarea>
+
+  <label>送りたいメッセージ（URLでも何でも）</label>
+  <textarea id="plaintext" rows="3" placeholder="例: https://example.com/secret-page"></textarea>
+
+  <button class="btn btn-green" onclick="encryptMsg()">暗号化する</button>
+  <span id="enc-status"></span>
+
+  <div class="flex-label" style="margin-top:12px">
+    <label style="margin:0">暗号文（これを相手に送る）</label>
+    <button class="copy-btn" onclick="copyText('ciphertext')">コピー</button>
+  </div>
+  <div class="cipher-box" id="ciphertext">ここに暗号文が表示されます</div>
+
+  <div class="info">
+    暗号文には IV（初期化ベクトル）が含まれています。この文字列だけを相手に送れば復号できます。<br>
+    盗聴されても、秘密鍵がなければ解読は不可能です。
+  </div>
+</div>
+
+<!-- Panel 2: 復号 -->
+<div class="panel" id="panel2">
+  <div class="section-title">復号</div>
+  <label>相手の公開鍵を貼り付け</label>
+  <textarea id="their-pub-dec" rows="2" placeholder="暗号化した相手の公開鍵（JWK）を貼り付け"></textarea>
+
+  <label>受け取った暗号文を貼り付け</label>
+  <textarea id="cipherinput" rows="3" placeholder="相手から受け取った暗号文を貼り付け"></textarea>
+
+  <button class="btn btn-red" onclick="decryptMsg()">復号する</button>
+  <span id="dec-status"></span>
+
+  <div style="margin-top:12px">
+    <label>復号されたメッセージ</label>
+    <div class="result-box" id="decrypted">ここに復号結果が表示されます</div>
+  </div>
+</div>
+
+</div>
+
+<script>
+// ---- State ----
+let myKeyPair = null; // { publicKey, privateKey } CryptoKey objects
+let myPublicJwk = null;
+let myPrivateJwk = null;
+
+// ---- Tab switching ----
+function switchTab(i) {
+  document.querySelectorAll('.tab').forEach((t,j) => t.classList.toggle('active', j===i));
+  document.querySelectorAll('.panel').forEach((p,j) => p.classList.toggle('active', j===i));
+}
+
+// ---- Helpers ----
+function buf2b64(buf) {
+  return btoa(String.fromCharCode(...new Uint8Array(buf)));
+}
+function b642buf(b64) {
+  const s = atob(b64);
+  const buf = new Uint8Array(s.length);
+  for (let i = 0; i < s.length; i++) buf[i] = s.charCodeAt(i);
+  return buf;
+}
+function showStatus(id, ok, msg) {
+  const el = document.getElementById(id);
+  el.innerHTML = `<span class="status ${ok ? 'ok' : 'wait'}">${msg}</span>`;
+}
+function copyText(id) {
+  const text = document.getElementById(id).innerText;
+  navigator.clipboard.writeText(text).then(() => {
+    const btn = event.target;
+    btn.textContent = 'コピー済';
+    setTimeout(() => btn.textContent = 'コピー', 1500);
+  });
+}
+
+// ---- Key Generation (ECDH P-256) ----
+async function generateKeys() {
+  try {
+    myKeyPair = await crypto.subtle.generateKey(
+      { name: 'ECDH', namedCurve: 'P-256' },
+      true, // extractable
+      ['deriveKey', 'deriveBits']
+    );
+    myPublicJwk = await crypto.subtle.exportKey('jwk', myKeyPair.publicKey);
+    myPrivateJwk = await crypto.subtle.exportKey('jwk', myKeyPair.privateKey);
+
+    document.getElementById('my-pub').textContent = JSON.stringify(myPublicJwk);
+    document.getElementById('my-sec').textContent = JSON.stringify(myPrivateJwk);
+    showStatus('gen-status', true, '生成完了');
+  } catch (e) {
+    showStatus('gen-status', false, 'エラー: ' + e.message);
+  }
+}
+
+// ---- Import secret key ----
+async function importMyKey() {
+  try {
+    const raw = document.getElementById('import-sec').value.trim();
+    const jwk = JSON.parse(raw);
+    // Import private key
+    const privateKey = await crypto.subtle.importKey(
+      'jwk', jwk,
+      { name: 'ECDH', namedCurve: 'P-256' },
+      true,
+      ['deriveKey', 'deriveBits']
+    );
+    // Derive public JWK from private JWK (remove d)
+    const pubJwk = { ...jwk };
+    delete pubJwk.d;
+    pubJwk.key_ops = [];
+    const publicKey = await crypto.subtle.importKey(
+      'jwk', pubJwk,
+      { name: 'ECDH', namedCurve: 'P-256' },
+      true, []
+    );
+    myKeyPair = { publicKey, privateKey };
+    myPublicJwk = await crypto.subtle.exportKey('jwk', publicKey);
+    myPrivateJwk = jwk;
+    document.getElementById('my-pub').textContent = JSON.stringify(myPublicJwk);
+    document.getElementById('my-sec').textContent = JSON.stringify(myPrivateJwk);
+    showStatus('import-status', true, 'インポート完了');
+  } catch (e) {
+    showStatus('import-status', false, 'エラー: ' + e.message);
+  }
+}
+
+// ---- Derive AES-256-GCM key from ECDH shared secret ----
+async function deriveAesKey(myPrivateKey, theirPublicJwk) {
+  const theirPub = await crypto.subtle.importKey(
+    'jwk', theirPublicJwk,
+    { name: 'ECDH', namedCurve: 'P-256' },
+    false, []
+  );
+  const aesKey = await crypto.subtle.deriveKey(
+    { name: 'ECDH', public: theirPub },
+    myPrivateKey,
+    { name: 'AES-GCM', length: 256 },
+    false,
+    ['encrypt', 'decrypt']
+  );
+  return aesKey;
+}
+
+// ---- Encrypt ----
+async function encryptMsg() {
+  try {
+    if (!myKeyPair) { showStatus('enc-status', false, '先に鍵を生成してください'); return; }
+    const theirPubRaw = document.getElementById('their-pub-enc').value.trim();
+    const plaintext = document.getElementById('plaintext').value;
+    if (!theirPubRaw) { showStatus('enc-status', false, '相手の公開鍵を入力してください'); return; }
+    if (!plaintext) { showStatus('enc-status', false, 'メッセージを入力してください'); return; }
+
+    const theirPubJwk = JSON.parse(theirPubRaw);
+    const aesKey = await deriveAesKey(myKeyPair.privateKey, theirPubJwk);
+
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const encoded = new TextEncoder().encode(plaintext);
+    const cipherBuf = await crypto.subtle.encrypt(
+      { name: 'AES-GCM', iv },
+      aesKey, encoded
+    );
+
+    // Pack: base64(iv) + "." + base64(ciphertext)
+    const payload = buf2b64(iv) + '.' + buf2b64(cipherBuf);
+    document.getElementById('ciphertext').textContent = payload;
+    showStatus('enc-status', true, '暗号化完了');
+  } catch (e) {
+    showStatus('enc-status', false, 'エラー: ' + e.message);
+  }
+}
+
+// ---- Decrypt ----
+async function decryptMsg() {
+  try {
+    if (!myKeyPair) { showStatus('dec-status', false, '先に鍵を生成/インポートしてください'); return; }
+    const theirPubRaw = document.getElementById('their-pub-dec').value.trim();
+    const cipherRaw = document.getElementById('cipherinput').value.trim();
+    if (!theirPubRaw) { showStatus('dec-status', false, '相手の公開鍵を入力してください'); return; }
+    if (!cipherRaw) { showStatus('dec-status', false, '暗号文を入力してください'); return; }
+
+    const theirPubJwk = JSON.parse(theirPubRaw);
+    const aesKey = await deriveAesKey(myKeyPair.privateKey, theirPubJwk);
+
+    const [ivB64, cipherB64] = cipherRaw.split('.');
+    const iv = b642buf(ivB64);
+    const cipherBuf = b642buf(cipherB64);
+
+    const plainBuf = await crypto.subtle.decrypt(
+      { name: 'AES-GCM', iv },
+      aesKey, cipherBuf
+    );
+    const plaintext = new TextDecoder().decode(plainBuf);
+    document.getElementById('decrypted').textContent = plaintext;
+    showStatus('dec-status', true, '復号成功');
+  } catch (e) {
+    document.getElementById('decrypted').textContent = '';
+    showStatus('dec-status', false, '復号失敗（鍵が違うか暗号文が不正）');
+  }
+}
+</script>
+</body>
+</html>
